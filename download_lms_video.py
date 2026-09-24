@@ -1,4 +1,4 @@
-"""Save one directly exposed MP4/WebM lecture file from the LMS player page.
+"""Save directly exposed MP4/WebM lecture files from one LMS course week.
 
 Run with: py download_lms_video.py
 Credentials are read from Windows Keyring. The script never prints them.
@@ -33,12 +33,11 @@ def ask_selection():
     course = input("과목명 (예: 관리회계): ").strip()
     try:
         week = int(input("주차 (예: 4): ").strip())
-        number = int(input("그 주차에서 몇 번째 영상인지 (예: 2=두 번째): ").strip())
     except ValueError as exc:
-        raise ValueError("주차와 영상 순번은 숫자로 입력하세요.") from exc
-    if not course or week < 1 or number < 1:
-        raise ValueError("과목명, 주차, 영상 순번을 입력해야 합니다.")
-    return course, week, number
+        raise ValueError("주차는 숫자로 입력하세요.") from exc
+    if not course or week < 1:
+        raise ValueError("과목명과 주차를 입력해야 합니다.")
+    return course, week
 
 
 def is_direct_file(url):
@@ -123,9 +122,26 @@ def save_video(url, context, filename_stem):
     return os.path.abspath(path)
 
 
+def open_player(page, activity_url):
+    """Open one activity and return its player page."""
+    page.goto(activity_url, wait_until="domcontentloaded")
+    video_page = page
+    video_page.wait_for_timeout(1200)
+
+    content_view = video_page.locator("a.btn.btn-default[onclick*='XinicsContentWindow']")
+    if content_view.count():
+        with video_page.expect_popup(timeout=10000) as content_popup:
+            content_view.first.click()
+        video_page = content_popup.value
+        video_page.wait_for_load_state("domcontentloaded")
+        video_page.wait_for_timeout(1000)
+
+    return video_page
+
+
 def main():
     try:
-        course_name, week, video_number = ask_selection()
+        course_name, week = ask_selection()
         username = keyring.get_password(SERVICE, USERNAME_KEY)
         password = keyring.get_password(SERVICE, username) if username else None
         if not username or not password:
@@ -174,55 +190,60 @@ def main():
                     href = link.evaluate("e => e.href")
                     if href not in seen_hrefs:
                         seen_hrefs.add(href)
-                        ordered_links.append(link)
-            if video_number > len(ordered_links):
-                raise RuntimeError(f"{week}주차 영상은 {len(ordered_links)}개뿐입니다. 선택한 순번 {video_number}를 확인하세요.")
-            target = ordered_links[video_number - 1]
-            video_title = re.sub(r"\s+", " ", target.inner_text()).strip()
+                        title = re.sub(r"\s+", " ", link.inner_text()).strip()
+                        ordered_links.append((href, title))
+            if not ordered_links:
+                raise RuntimeError(f"{week}주차에서 영상을 찾지 못했습니다.")
 
-            video_page = None
-            try:
-                with page.expect_popup(timeout=1500) as popup:
-                    target.click()
-                video_page = popup.value
-            except PlaywrightTimeoutError:
-                # Most LMS activity links open in the current tab.
-                pass
-            if video_page is not None:
-                page = video_page
-            page.wait_for_load_state("domcontentloaded")
-            page.wait_for_timeout(1500)
-
-            # The activity click may already open viewer.php. Other activities
-            # land on view.php first and show a separate "콘텐츠 보기" popup link.
-            player_page = page
-            content_view = page.locator("a.btn.btn-default[onclick*='XinicsContentWindow']")
-            if content_view.count():
-                with page.expect_popup(timeout=10000) as content_popup:
-                    content_view.first.click()
-                player_page = content_popup.value
-                player_page.wait_for_load_state("domcontentloaded")
-                player_page.wait_for_timeout(1200)
-
-            cms_frame = None
-            for frame in player_page.frames:
+            print(f"{week}주차 영상 {len(ordered_links)}개를 순서대로 처리합니다.")
+            failures = []
+            for index, (activity_url, video_title) in enumerate(ordered_links, start=1):
+                player_page = None
                 try:
-                    if frame.locator(".vc-front-screen-play-btn").count():
-                        cms_frame = frame
-                        break
-                except Exception:
-                    continue
-            if cms_frame is None:
-                raise RuntimeError("Could not find the center play control (.vc-front-screen-play-btn).")
-            cms_frame.locator(".vc-front-screen-play-btn").click()
-            player_page.wait_for_timeout(10000)
-            media_url = discover_media_url(player_page)
-            if not media_url:
-                raise RuntimeError("페이지에서 직접 MP4/WebM 파일 링크를 찾지 못했습니다. HLS 등 스트리밍 형식일 수 있습니다.")
+                    print(f"[{index}/{len(ordered_links)}] {video_title} 여는 중...")
+                    player_page = open_player(page, activity_url)
+                    cms_frame = None
+                    for frame in player_page.frames:
+                        try:
+                            if frame.locator(".vc-front-screen-play-btn").count():
+                                cms_frame = frame
+                                break
+                        except Exception:
+                            continue
+                    if cms_frame is None:
+                        raise RuntimeError("재생 버튼을 찾지 못했습니다.")
+                    cms_frame.locator(".vc-front-screen-play-btn").click()
+                    player_page.wait_for_timeout(5000)
+                    media_url = discover_media_url(player_page)
+                    if not media_url:
+                        raise RuntimeError("직접 다운로드 가능한 MP4/WebM 링크를 찾지 못했습니다.")
 
-            filename = re.sub(r"[^\w.-]+", "_", f"{course_name}_{week}week_{video_number}_{video_title}", flags=re.UNICODE)
-            saved_path = save_video(media_url, context, filename)
-            print(f"영상 파일을 저장했습니다: {saved_path}")
+                    filename = re.sub(
+                        r"[^\w.-]+", "_",
+                        f"{course_name}_{week}week_{index}_{video_title}", flags=re.UNICODE
+                    )
+                    saved_path = save_video(media_url, context, filename)
+                    print(f"저장 완료: {saved_path}")
+                except Exception as exc:
+                    failures.append((index, video_title, str(exc)))
+                    print(f"[{index}/{len(ordered_links)}] 실패: {exc}")
+                finally:
+                    if player_page is not None and player_page is not page:
+                        try:
+                            player_page.close()
+                        except Exception:
+                            pass
+                    # Keep the next item on the course page; popup activities do not
+                    # disturb it, and current-tab activities are reopened by URL.
+                    if page.url != await_course_url:
+                        page.goto(await_course_url, wait_until="domcontentloaded")
+
+            if failures:
+                print(f"완료: {len(ordered_links) - len(failures)}개 성공, {len(failures)}개 실패")
+                for index, title, reason in failures:
+                    print(f"  {index}. {title}: {reason}")
+            else:
+                print(f"주차 영상 {len(ordered_links)}개를 모두 저장했습니다.")
             browser.close()
     except Exception as exc:
         print(f"문제: {exc}")
