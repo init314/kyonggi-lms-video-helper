@@ -29,6 +29,11 @@ def normalize_label(value):
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value)).casefold()
 
 
+def safe_path_component(value):
+    value = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", value).strip(" .")
+    return value or "미분류"
+
+
 def ask_selection():
     course = input("과목명 (예: 관리회계): ").strip()
     try:
@@ -84,7 +89,7 @@ def discover_media_url(page):
     return None
 
 
-def save_video(url, context, filename_stem):
+def save_video(url, context, filename_stem, course_name, week):
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     parsed = urllib.parse.urlsplit(url)
     cookies = context.cookies(url)
@@ -111,8 +116,9 @@ def save_video(url, context, filename_stem):
             else:
                 raise RuntimeError(f"응답이 영상 파일이 아닙니다 (Content-Type: {content_type}).")
 
-        os.makedirs("downloads", exist_ok=True)
-        path = os.path.join("downloads", filename_stem + ext)
+        folder = os.path.join("downloads", safe_path_component(course_name), f"{week}주차")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, filename_stem + ext)
         with open(path, "wb") as output:
             while True:
                 chunk = response.read(1024 * 1024)
@@ -222,7 +228,7 @@ def main():
                         r"[^\w.-]+", "_",
                         f"{course_name}_{week}week_{index}_{video_title}", flags=re.UNICODE
                     )
-                    saved_path = save_video(media_url, context, filename)
+                    saved_path = save_video(media_url, context, filename, course_name, week)
                     print(f"저장 완료: {saved_path}")
                 except Exception as exc:
                     failures.append((index, video_title, str(exc)))

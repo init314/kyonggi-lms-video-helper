@@ -17,4 +17,4 @@ py download_lms_video.py
 py watch_lms_lecture.py
 ```
 
-The downloader asks for a course name and week, then opens and saves that week's videos one at a time in LMS order. Downloaded files are written to `downloads/`, which is excluded from Git. Videos exposed as direct MP4/WebM files are supported; streaming-only formats may be reported as failures.
+The downloader asks for a course name and week, then opens and saves that week's videos one at a time in LMS order. Files are organized under `downloads/<course>/<week>주차/`; `downloads/` is excluded from Git. Videos exposed as direct MP4/WebM files are supported; streaming-only formats may be reported as failures.
