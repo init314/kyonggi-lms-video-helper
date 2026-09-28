@@ -68,7 +68,26 @@ python -m venv .venv
 .\.venv\Scripts\pythonw.exe src\main.py --course '과목명' --week 4
 ```
 
-STT 모델은 `small`, `medium`, `large-v3` 또는 CTranslate2 모델 폴더를 입력합니다. 처음 사용하면 모델을 내려받고 이후 캐시를 사용합니다. CPU/int8로 실행하며 한 작업에서 모델을 재사용합니다.
+STT 모델은 `small`, `medium`, `large-v3`, `large-v3-turbo` 또는 CTranslate2 모델 폴더를 입력합니다. 처음 사용하면 모델을 내려받고 이후 캐시를 사용합니다. 기본 추천은 `large-v3-turbo`입니다.
+
+## RX 9070 XT GPU 설정
+
+AMD Radeon RX 9070 XT에서는 기존 Faster-Whisper/CTranslate2 대신 AMD ROCm용 PyTorch와 Hugging Face Transformers 경로를 사용합니다. AMD ROCm이 감지되면 전사 시 자동으로 Radeon GPU와 FP16을 선택하고, 감지되지 않으면 기존 CPU 경로를 사용합니다. AMD GPU 전사는 Hugging Face Whisper 모델 ID 또는 `small`, `medium`, `large-v3`, `large-v3-turbo` 별칭을 지원합니다.
+
+1. Windows 11과 [AMD가 지원하는 그래픽 드라이버](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html)를 설치합니다. 현재 AMD 안내서는 ROCm 7.2.1에 Python 3.12와 26.2.2 그래픽 드라이버를 요구합니다.
+2. 프로젝트 폴더에서 다음 명령을 실행합니다. ROCm용 별도 `.venv-rocm`을 만들고 AMD PyTorch, 프로젝트 패키지, Chromium을 설치한 뒤 GPU 감지를 확인합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_amd_rocm.ps1
+```
+
+3. AMD GPU가 포함된 실행파일을 만들려면 `.venv-rocm` 환경에서 빌드합니다.
+
+```powershell
+.venv-rocm\Scripts\python.exe -m PyInstaller --noconfirm StudySsalmeok.spec
+```
+
+GPU 설정을 마친 뒤에는 모델 입력란에 `large-v3-turbo`를 권장합니다. 한국어 강의의 정확도를 우선하면 `large-v3`를 사용하세요. RX 9070 XT 16GB 메모리에서는 FP16 대형 모델을 사용할 여유가 있습니다. 첫 실행에서 모델 파일을 내려받습니다.
 
 ## EXE 빌드
 

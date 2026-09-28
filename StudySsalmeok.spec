@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
+import importlib.util
 
 
 ROOT = Path(SPECPATH)
@@ -8,6 +9,7 @@ SRC_DIR = ROOT / "src"
 
 
 block_cipher = None
+HAS_TORCH = importlib.util.find_spec("torch") is not None
 
 
 a = Analysis(
@@ -20,7 +22,10 @@ a = Analysis(
     ],
     hiddenimports=[
         "faster_whisper",
-    ],
+        "transformers",
+        "accelerate",
+        "safetensors",
+    ] + (["torch"] if HAS_TORCH else []),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -29,9 +34,6 @@ a = Analysis(
         "matplotlib",
         "rich",
         "tensorflow",
-        "torch",
-        "torchaudio",
-        "torchvision",
         "typer",
     ],
     win_no_prefer_redirects=False,

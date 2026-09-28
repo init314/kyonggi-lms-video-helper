@@ -83,6 +83,8 @@ class StudySsalmeokApp(QWidget):
         self.select_audio_button.clicked.connect(self.select_audio_file)
         form.addRow('영상·오디오', self.path_row(self.audio_input, self.select_audio_button))
         self.model_input = QLineEdit(self.settings.value('model', DEFAULT_MODEL_REF))
+        self.model_input.setPlaceholderText('large-v3-turbo (RX 9070 XT 추천) 또는 large-v3 (정확도 우선)')
+        self.model_input.setToolTip('RX 9070 XT: large-v3-turbo 속도·정확도 균형, large-v3 정확도 우선')
         self.download_input = QLineEdit(self.settings.value('downloads', str(DEFAULT_DOWNLOAD_DIR)))
         self.output_input = QLineEdit(self.settings.value('output', str(DEFAULT_OUTPUT_DIR)))
         for label, field in [('STT 모델', self.model_input), ('영상 저장 폴더', self.download_input), ('전사 출력 폴더', self.output_input)]:
